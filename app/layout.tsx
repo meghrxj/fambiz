@@ -3,6 +3,7 @@ import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 import { PasswordGate } from '@/components/password-gate';
 import { Sidebar } from '@/components/sidebar';
+import { StoreInitializer } from '@/components/store-initializer';
 
 export const metadata: Metadata = {
   title: 'Family Finance OS',
@@ -15,6 +16,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
       <body suppressHydrationWarning className="bg-[#0a0a0a] text-zinc-100 antialiased selection:bg-emerald-500/30">
         <AuthProvider>
           <PasswordGate>
+            <StoreInitializer />
             <div className="flex min-h-screen">
               <main className="flex-1 mr-64 p-8 overflow-y-auto">
                 {children}

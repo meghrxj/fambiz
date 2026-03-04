@@ -5,9 +5,6 @@ import { useFinanceStore, FamilyMember, ExpenseCategory } from '@/lib/store';
 import { Plus, Trash2, User, Tag, Download, Upload, RefreshCcw, Shield, Users, Layers, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-import { useCloudSync } from '@/lib/sync-logic';
-import { Cloud, CloudOff, CloudRain, CheckCircle2, AlertCircle } from 'lucide-react';
-
 export default function SettingsPage() {
   const { 
     members, 
@@ -26,37 +23,7 @@ export default function SettingsPage() {
     profitShares,
     properties,
     rentalPayments,
-    syncId,
-    lastSynced,
-    setSyncId
   } = useFinanceStore();
-
-  const { pushToCloud, pullFromCloud, deleteFromServer, isSyncing, error: syncError } = useCloudSync();
-  const [syncInput, setSyncInput] = useState(syncId || '');
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  const handleEnableSync = async () => {
-    if (!syncInput) return;
-    const success = await pullFromCloud(syncInput);
-    if (success) {
-      setSyncId(syncInput);
-      setSyncStatus('success');
-    } else {
-      // If doesn't exist, we create it with current local data
-      setSyncId(syncInput);
-      await pushToCloud();
-      setSyncStatus('success');
-    }
-  };
-
-  const handleDeleteFromServer = async () => {
-    if (confirm('Are you sure you want to delete your data from the server? This will NOT delete your local data.')) {
-      const success = await deleteFromServer();
-      if (success) {
-        alert('Data deleted from server successfully.');
-      }
-    }
-  };
 
   const [newMember, setNewMember] = useState({ name: '', relationship: '' });
   const [newCategory, setNewCategory] = useState({ name: '', subcategories: '' });
@@ -217,87 +184,6 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Server Sync */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-white font-semibold">
-          <Database size={20} className="text-sky-500" />
-          <h3>Server Sync (Cross-Device)</h3>
-        </div>
-        <div className="bg-[#141414] border border-white/5 rounded-2xl p-8">
-          <div className="max-w-xl">
-            <p className="text-zinc-400 text-sm mb-6">
-              Enable Server Sync to access your data across different devices. 
-              Your data will be stored securely on this website&apos;s server.
-              Enter a unique <strong>Sync Key</strong> to link your devices.
-            </p>
-            
-            <div className="flex gap-3">
-              <input 
-                type="text" 
-                placeholder="Enter your unique Sync Key"
-                value={syncInput}
-                onChange={(e) => setSyncInput(e.target.value)}
-                className="flex-1 bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500/50"
-              />
-              <button 
-                onClick={handleEnableSync}
-                disabled={isSyncing}
-                className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium transition-all flex items-center gap-2"
-              >
-                {isSyncing ? <RefreshCcw size={18} className="animate-spin" /> : <RefreshCcw size={18} />}
-                {syncId ? 'Update Key' : 'Enable Sync'}
-              </button>
-            </div>
-
-            {syncId && (
-              <div className="mt-6 space-y-4">
-                <div className="flex items-center justify-between p-4 bg-sky-500/5 border border-sky-500/10 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle2 size={18} className="text-sky-500" />
-                    <div>
-                      <p className="text-white text-sm font-medium">Server Sync Active</p>
-                      <p className="text-zinc-500 text-xs">Last synced: {lastSynced ? new Date(lastSynced).toLocaleString() : 'Never'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => pushToCloud()}
-                      disabled={isSyncing}
-                      className="text-sky-500 hover:text-sky-400 text-xs font-bold uppercase tracking-wider"
-                    >
-                      Sync Now
-                    </button>
-                    <button 
-                      onClick={handleDeleteFromServer}
-                      disabled={isSyncing}
-                      className="text-rose-500 hover:text-rose-400 text-xs font-bold uppercase tracking-wider"
-                    >
-                      Delete from Server
-                    </button>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => {
-                    setSyncId(null);
-                    setSyncInput('');
-                  }}
-                  className="text-zinc-500 hover:text-white text-xs underline"
-                >
-                  Disable Sync on this device
-                </button>
-              </div>
-            )}
-
-            {syncError && (
-              <div className="mt-4 flex items-center gap-2 text-rose-500 text-xs">
-                <AlertCircle size={14} />
-                <span>Error: {syncError}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>

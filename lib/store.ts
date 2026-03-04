@@ -174,13 +174,12 @@ interface FinanceState {
   addProfitShare: (share: ProfitShare) => void;
   deleteProfitShare: (id: string) => void;
 
-  // Sync
-  syncId: string | null;
-  lastSynced: string | null;
-  setSyncId: (id: string | null) => void;
-  setLastSynced: (date: string | null) => void;
+  // Global Data Actions
   importData: (data: any) => void;
   resetData: () => void;
+  loadFromServer: () => Promise<void>;
+  saveToServer: () => Promise<void>;
+  isLoaded: boolean;
 }
 
 const DEFAULT_CATEGORIES: ExpenseCategory[] = [
@@ -197,74 +196,40 @@ const DEFAULT_CATEGORIES: ExpenseCategory[] = [
 
 export const useFinanceStore = create<FinanceState>()(
   persist(
-    (set) => ({
-      members: [],
-      salaries: [],
-      properties: [],
-      rentalPayments: [],
-      categories: DEFAULT_CATEGORIES,
-      expenses: [],
-      liabilities: [],
-      investments: [],
-      lending: [],
-      profitShares: [],
+    (set, get) => {
+      const saveToServer = async () => {
+        const state = get();
+        if (!state.isLoaded) return; // Don't save if we haven't loaded from server yet
 
-      addMember: (member) => set((state) => ({ members: [...state.members, member] })),
-      updateMember: (member) => set((state) => ({ members: state.members.map(m => m.id === member.id ? member : m) })),
-      deleteMember: (id) => set((state) => ({ members: state.members.filter(m => m.id !== id) })),
+        const dataToSave = {
+          members: state.members,
+          salaries: state.salaries,
+          properties: state.properties,
+          rentalPayments: state.rentalPayments,
+          categories: state.categories,
+          expenses: state.expenses,
+          liabilities: state.liabilities,
+          investments: state.investments,
+          lending: state.lending,
+          profitShares: state.profitShares,
+        };
+        try {
+          await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: dataToSave }),
+          });
+        } catch (error) {
+          console.error('Failed to save to server:', error);
+        }
+      };
 
-      addSalary: (salary) => set((state) => ({ salaries: [...state.salaries, salary] })),
-      deleteSalary: (id) => set((state) => ({ salaries: state.salaries.filter(s => s.id !== id) })),
+      const autoSet = (fn: (state: FinanceState) => any) => {
+        set(fn);
+        saveToServer();
+      };
 
-      addProperty: (property) => set((state) => ({ properties: [...state.properties, property] })),
-      updateProperty: (property) => set((state) => ({ properties: state.properties.map(p => p.id === property.id ? property : p) })),
-      deleteProperty: (id) => set((state) => ({ properties: state.properties.filter(p => p.id !== id) })),
-
-      addRentalPayment: (payment) => set((state) => ({ rentalPayments: [...state.rentalPayments, payment] })),
-      deleteRentalPayment: (id) => set((state) => ({ rentalPayments: state.rentalPayments.filter(p => p.id !== id) })),
-
-      addCategory: (category) => set((state) => ({ categories: [...state.categories, category] })),
-      deleteCategory: (id) => set((state) => ({ categories: state.categories.filter(c => c.id !== id) })),
-
-      addExpense: (expense) => set((state) => ({ expenses: [...state.expenses, expense] })),
-      deleteExpense: (id) => set((state) => ({ expenses: state.expenses.filter(e => e.id !== id) })),
-
-      addLiability: (liability) => set((state) => ({ liabilities: [...state.liabilities, liability] })),
-      updateLiability: (liability) => set((state) => ({ liabilities: state.liabilities.map(l => l.id === liability.id ? liability : l) })),
-      deleteLiability: (id) => set((state) => ({ liabilities: state.liabilities.filter(l => l.id !== id) })),
-
-      addInvestment: (investment) => set((state) => ({ investments: [...state.investments, investment] })),
-      updateInvestment: (investment) => set((state) => ({ investments: state.investments.map(i => i.id === investment.id ? investment : i) })),
-      deleteInvestment: (id) => set((state) => ({ investments: state.investments.filter(i => i.id !== id) })),
-
-      addLending: (lending) => set((state) => ({ lending: [...state.lending, lending] })),
-      updateLending: (lending) => set((state) => ({ lending: state.lending.map(l => l.id === lending.id ? lending : l) })),
-      deleteLending: (id) => set((state) => ({ lending: state.lending.filter(l => l.id !== id) })),
-
-      addProfitShare: (share) => set((state) => ({ profitShares: [...state.profitShares, share] })),
-      deleteProfitShare: (id) => set((state) => ({ profitShares: state.profitShares.filter(s => s.id !== id) })),
-
-      // Sync
-      syncId: null,
-      lastSynced: null,
-      setSyncId: (id) => set({ syncId: id }),
-      setLastSynced: (date) => set({ lastSynced: date }),
-
-      importData: (data) => set(() => ({ 
-        members: data.members || [],
-        categories: data.categories || [],
-        salaries: data.salaries || [],
-        expenses: data.expenses || [],
-        liabilities: data.liabilities || [],
-        investments: data.investments || [],
-        lending: data.lending || [],
-        profitShares: data.profitShares || [],
-        properties: data.properties || [],
-        rentalPayments: data.rentalPayments || [],
-        syncId: data.syncId || null,
-        lastSynced: data.lastSynced || null,
-      })),
-      resetData: () => set(() => ({
+      return {
         members: [],
         salaries: [],
         properties: [],
@@ -275,8 +240,104 @@ export const useFinanceStore = create<FinanceState>()(
         investments: [],
         lending: [],
         profitShares: [],
-      })),
-    }),
+        isLoaded: false,
+
+        addMember: (member) => autoSet((state) => ({ members: [...state.members, member] })),
+        updateMember: (member) => autoSet((state) => ({ members: state.members.map(m => m.id === member.id ? member : m) })),
+        deleteMember: (id) => autoSet((state) => ({ members: state.members.filter(m => m.id !== id) })),
+
+        addSalary: (salary) => autoSet((state) => ({ salaries: [...state.salaries, salary] })),
+        deleteSalary: (id) => autoSet((state) => ({ salaries: state.salaries.filter(s => s.id !== id) })),
+
+        addProperty: (property) => autoSet((state) => ({ properties: [...state.properties, property] })),
+        updateProperty: (property) => autoSet((state) => ({ properties: state.properties.map(p => p.id === property.id ? property : p) })),
+        deleteProperty: (id) => autoSet((state) => ({ properties: state.properties.filter(p => p.id !== id) })),
+
+        addRentalPayment: (payment) => autoSet((state) => ({ rentalPayments: [...state.rentalPayments, payment] })),
+        deleteRentalPayment: (id) => autoSet((state) => ({ rentalPayments: state.rentalPayments.filter(p => p.id !== id) })),
+
+        addCategory: (category) => autoSet((state) => ({ categories: [...state.categories, category] })),
+        deleteCategory: (id) => autoSet((state) => ({ categories: state.categories.filter(c => c.id !== id) })),
+
+        addExpense: (expense) => autoSet((state) => ({ expenses: [...state.expenses, expense] })),
+        deleteExpense: (id) => autoSet((state) => ({ expenses: state.expenses.filter(e => e.id !== id) })),
+
+        addLiability: (liability) => autoSet((state) => ({ liabilities: [...state.liabilities, liability] })),
+        updateLiability: (liability) => autoSet((state) => ({ liabilities: state.liabilities.map(l => l.id === liability.id ? liability : l) })),
+        deleteLiability: (id) => autoSet((state) => ({ liabilities: state.liabilities.filter(l => l.id !== id) })),
+
+        addInvestment: (investment) => autoSet((state) => ({ investments: [...state.investments, investment] })),
+        updateInvestment: (investment) => autoSet((state) => ({ investments: state.investments.map(i => i.id === investment.id ? investment : i) })),
+        deleteInvestment: (id) => autoSet((state) => ({ investments: state.investments.filter(i => i.id !== id) })),
+
+        addLending: (lending) => autoSet((state) => ({ lending: [...state.lending, lending] })),
+        updateLending: (lending) => autoSet((state) => ({ lending: state.lending.map(l => l.id === lending.id ? lending : l) })),
+        deleteLending: (id) => autoSet((state) => ({ lending: state.lending.filter(l => l.id !== id) })),
+
+        addProfitShare: (share) => autoSet((state) => ({ profitShares: [...state.profitShares, share] })),
+        deleteProfitShare: (id) => autoSet((state) => ({ profitShares: state.profitShares.filter(s => s.id !== id) })),
+
+        importData: (data) => autoSet(() => ({ 
+          members: data.members || [],
+          categories: data.categories || [],
+          salaries: data.salaries || [],
+          expenses: data.expenses || [],
+          liabilities: data.liabilities || [],
+          investments: data.investments || [],
+          lending: data.lending || [],
+          profitShares: data.profitShares || [],
+          properties: data.properties || [],
+          rentalPayments: data.rentalPayments || [],
+        })),
+
+        resetData: () => {
+          set(() => ({
+            members: [],
+            salaries: [],
+            properties: [],
+            rentalPayments: [],
+            categories: DEFAULT_CATEGORIES,
+            expenses: [],
+            liabilities: [],
+            investments: [],
+            lending: [],
+            profitShares: [],
+          }));
+          fetch('/api/sync', { method: 'DELETE' }).catch(console.error);
+        },
+
+        loadFromServer: async () => {
+          try {
+            const response = await fetch('/api/sync');
+            const result = await response.json();
+            if (result.data) {
+              set(() => ({ 
+                members: result.data.members || [],
+                categories: result.data.categories || [],
+                salaries: result.data.salaries || [],
+                expenses: result.data.expenses || [],
+                liabilities: result.data.liabilities || [],
+                investments: result.data.investments || [],
+                lending: result.data.lending || [],
+                profitShares: result.data.profitShares || [],
+                properties: result.data.properties || [],
+                rentalPayments: result.data.rentalPayments || [],
+                isLoaded: true,
+              }));
+            } else {
+              set({ isLoaded: true });
+            }
+          } catch (error) {
+            console.error('Failed to load from server:', error);
+            set({ isLoaded: true }); // Still set to true so we can save new data
+          }
+        },
+
+        saveToServer: async () => {
+          await saveToServer();
+        },
+      };
+    },
     {
       name: 'family-finance-storage',
     }

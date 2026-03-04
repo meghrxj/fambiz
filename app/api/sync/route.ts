@@ -11,82 +11,50 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const syncKey = searchParams.get('key');
-
-  if (!syncKey) {
-    return NextResponse.json({ error: 'Sync key is required' }, { status: 400 });
-  }
-
   try {
     if (!fs.existsSync(DATA_FILE)) {
       return NextResponse.json({ data: null });
     }
 
     const fileContent = fs.readFileSync(DATA_FILE, 'utf-8');
-    const allData = JSON.parse(fileContent);
+    if (!fileContent.trim()) {
+      return NextResponse.json({ data: null });
+    }
+    const data = JSON.parse(fileContent);
 
-    // Return data for the specific key
-    return NextResponse.json({ data: allData[syncKey] || null });
+    return NextResponse.json({ data });
   } catch (error) {
-    console.error('Error reading sync data:', error);
+    console.error('Error reading data:', error);
     return NextResponse.json({ error: 'Failed to read data' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const { key, data } = await request.json();
+    const { data } = await request.json();
 
-    if (!key) {
-      return NextResponse.json({ error: 'Sync key is required' }, { status: 400 });
-    }
-
-    let allData: Record<string, any> = {};
-    if (fs.existsSync(DATA_FILE)) {
-      const fileContent = fs.readFileSync(DATA_FILE, 'utf-8');
-      allData = JSON.parse(fileContent);
-    }
-
-    // Update data for the specific key
-    allData[key] = {
+    const dataToSave = {
       ...data,
       updatedAt: new Date().toISOString(),
     };
 
-    fs.writeFileSync(DATA_FILE, JSON.stringify(allData, null, 2));
+    fs.writeFileSync(DATA_FILE, JSON.stringify(dataToSave, null, 2));
 
-    return NextResponse.json({ success: true, updatedAt: allData[key].updatedAt });
+    return NextResponse.json({ success: true, updatedAt: dataToSave.updatedAt });
   } catch (error) {
-    console.error('Error saving sync data:', error);
+    console.error('Error saving data:', error);
     return NextResponse.json({ error: 'Failed to save data' }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const syncKey = searchParams.get('key');
-
-  if (!syncKey) {
-    return NextResponse.json({ error: 'Sync key is required' }, { status: 400 });
-  }
-
   try {
-    if (!fs.existsSync(DATA_FILE)) {
-      return NextResponse.json({ success: true });
+    if (fs.existsSync(DATA_FILE)) {
+      fs.unlinkSync(DATA_FILE);
     }
-
-    const fileContent = fs.readFileSync(DATA_FILE, 'utf-8');
-    const allData = JSON.parse(fileContent);
-
-    if (allData[syncKey]) {
-      delete allData[syncKey];
-      fs.writeFileSync(DATA_FILE, JSON.stringify(allData, null, 2));
-    }
-
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting sync data:', error);
+    console.error('Error deleting data:', error);
     return NextResponse.json({ error: 'Failed to delete data' }, { status: 500 });
   }
 }
