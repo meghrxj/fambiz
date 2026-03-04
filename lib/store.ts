@@ -180,6 +180,7 @@ interface FinanceState {
   loadFromServer: () => Promise<void>;
   saveToServer: () => Promise<void>;
   isLoaded: boolean;
+  serverStatus: 'connected' | 'error' | 'loading';
 }
 
 const DEFAULT_CATEGORIES: ExpenseCategory[] = [
@@ -214,7 +215,7 @@ export const useFinanceStore = create<FinanceState>()(
           profitShares: state.profitShares,
         };
         try {
-          await fetch('/api/sync', {
+          await fetch('/api/data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ data: dataToSave }),
@@ -241,6 +242,7 @@ export const useFinanceStore = create<FinanceState>()(
         lending: [],
         profitShares: [],
         isLoaded: false,
+        serverStatus: 'loading',
 
         addMember: (member) => autoSet((state) => ({ members: [...state.members, member] })),
         updateMember: (member) => autoSet((state) => ({ members: state.members.map(m => m.id === member.id ? member : m) })),
@@ -303,12 +305,27 @@ export const useFinanceStore = create<FinanceState>()(
             lending: [],
             profitShares: [],
           }));
-          fetch('/api/sync', { method: 'DELETE' }).catch(console.error);
+          fetch('/api/data', { method: 'DELETE' }).catch(console.error);
         },
 
         loadFromServer: async () => {
           try {
-            const response = await fetch('/api/sync');
+            set({ serverStatus: 'loading' });
+            const response = await fetch('/api/data');
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+              console.error('Server returned non-JSON response');
+              set({ isLoaded: true, serverStatus: 'error' });
+              return;
+            }
+
+            if (!response.ok) {
+              console.error('Server error response');
+              set({ isLoaded: true, serverStatus: 'error' });
+              return;
+            }
+
             const result = await response.json();
             if (result.data) {
               set(() => ({ 
@@ -323,13 +340,14 @@ export const useFinanceStore = create<FinanceState>()(
                 properties: result.data.properties || [],
                 rentalPayments: result.data.rentalPayments || [],
                 isLoaded: true,
+                serverStatus: 'connected',
               }));
             } else {
-              set({ isLoaded: true });
+              set({ isLoaded: true, serverStatus: 'connected' });
             }
           } catch (error) {
             console.error('Failed to load from server:', error);
-            set({ isLoaded: true }); // Still set to true so we can save new data
+            set({ isLoaded: true, serverStatus: 'error' });
           }
         },
 

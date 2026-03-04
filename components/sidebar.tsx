@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useFinanceStore } from '@/lib/store';
 import { 
   LayoutDashboard, 
   Wallet, 
@@ -16,7 +17,10 @@ import {
   BarChart3, 
   Settings, 
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Database,
+  AlertCircle,
+  RefreshCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +46,7 @@ const navItems = [
 export const Sidebar = () => {
   const pathname = usePathname();
   const { logout } = useAuth();
+  const serverStatus = useFinanceStore((state) => state.serverStatus);
 
   return (
     <aside className="fixed right-0 top-0 h-screen w-64 bg-[#0f0f0f] border-l border-white/5 flex flex-col z-50">
@@ -102,7 +107,28 @@ export const Sidebar = () => {
         })}
       </nav>
 
-      <div className="p-4 border-t border-white/5 mt-auto">
+      <div className="p-4 border-t border-white/5 mt-auto space-y-2">
+        <div className="px-3 py-2 rounded-lg bg-white/5 flex items-center gap-3">
+          {serverStatus === 'connected' ? (
+            <Database size={14} className="text-emerald-500" />
+          ) : serverStatus === 'loading' ? (
+            <RefreshCcw size={14} className="text-sky-500 animate-spin" />
+          ) : (
+            <AlertCircle size={14} className="text-rose-500" />
+          )}
+          <div className="flex flex-col">
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Website Storage</span>
+            <span className={cn(
+              "text-xs font-medium",
+              serverStatus === 'connected' ? "text-emerald-400" : 
+              serverStatus === 'loading' ? "text-sky-400" : "text-rose-400"
+            )}>
+              {serverStatus === 'connected' ? 'Connected' : 
+               serverStatus === 'loading' ? 'Connecting...' : 'Connection Error'}
+            </span>
+          </div>
+        </div>
+
         <button
           onClick={logout}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-zinc-500 hover:text-red-400 hover:bg-red-400/5 transition-colors"
