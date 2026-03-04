@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { put, list, del } from '@vercel/blob';
 
 // Use the token provided by the user, prioritizing environment variable
-const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || "vercel_blob_rw_u7xmQmFK11UoBPbb_xnZiuH1Y9Pbd11RnkpFRYVQIlA2BkY";
+const BLOB_TOKEN = (process.env.BLOB_READ_WRITE_TOKEN && process.env.BLOB_READ_WRITE_TOKEN.length > 0) 
+  ? process.env.BLOB_READ_WRITE_TOKEN 
+  : "vercel_blob_rw_u7xmQmFK11UoBPbb_xnZiuH1Y9Pbd11RnkpFRYVQIlA2BkY";
+
 const BLOB_PREFIX = 'family_finance_db';
 const BLOB_FILENAME = 'family_finance_db.json';
 
@@ -10,22 +13,30 @@ export async function GET() {
   try {
     console.log('GET /api/data - Fetching from Vercel Blob');
     
-    if (!BLOB_TOKEN) {
-      throw new Error('Vercel Blob token is missing');
+    if (!BLOB_TOKEN || BLOB_TOKEN.length < 10) {
+      throw new Error('Vercel Blob token is missing or invalid');
     }
 
     // List blobs to find the latest one with our prefix
-    const { blobs } = await list({
-      prefix: BLOB_PREFIX,
-      token: BLOB_TOKEN,
-    });
+    let listResult;
+    try {
+      listResult = await list({
+        prefix: BLOB_PREFIX,
+        token: BLOB_TOKEN,
+      });
+    } catch (listErr) {
+      console.error('Vercel Blob list error:', listErr);
+      throw new Error(`Vercel Blob list failed: ${listErr instanceof Error ? listErr.message : String(listErr)}`);
+    }
+
+    const blobs = listResult.blobs;
 
     if (!blobs || blobs.length === 0) {
       console.log('No blobs found, returning empty data');
       return NextResponse.json({ data: {} });
     }
 
-    // Sort by uploadedAt to get the latest. Ensure we handle Date objects or strings.
+    // Sort by uploadedAt to get the latest.
     const latestBlob = blobs.sort((a, b) => {
       const dateA = new Date(a.uploadedAt).getTime();
       const dateB = new Date(b.uploadedAt).getTime();
@@ -35,7 +46,7 @@ export async function GET() {
     console.log(`Fetching latest blob: ${latestBlob.url}`);
     const response = await fetch(latestBlob.url, { cache: 'no-store' });
     if (!response.ok) {
-      throw new Error(`Failed to fetch blob content: ${response.statusText}`);
+      throw new Error(`Failed to fetch blob content from URL: ${response.statusText} (${response.status})`);
     }
 
     const data = await response.json();
@@ -50,8 +61,7 @@ export async function GET() {
     console.error('Error in GET /api/data (Vercel Blob):', error);
     return NextResponse.json({ 
       error: 'Failed to read database', 
-      details: String(error),
-      stack: process.env.NODE_ENV === 'development' ? (error as Error).stack : undefined
+      details: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }
@@ -65,8 +75,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No data provided' }, { status: 400 });
     }
 
-    if (!BLOB_TOKEN) {
-      throw new Error('Vercel Blob token is missing');
+    if (!BLOB_TOKEN || BLOB_TOKEN.length < 10) {
+      throw new Error('Vercel Blob token is missing or invalid');
     }
 
     const dataToSave = {
@@ -76,14 +86,18 @@ export async function POST(request: Request) {
 
     console.log('POST /api/data - Saving to Vercel Blob');
     
-    // Save to Vercel Blob. We use addRandomSuffix: true to ensure a unique URL
-    // which bypasses any CDN/browser caching of the blob itself.
-    const blob = await put(BLOB_FILENAME, JSON.stringify(dataToSave, null, 2), {
-      access: 'public',
-      token: BLOB_TOKEN,
-      addRandomSuffix: true,
-      contentType: 'application/json',
-    });
+    let blob;
+    try {
+      blob = await put(BLOB_FILENAME, JSON.stringify(dataToSave, null, 2), {
+        access: 'public',
+        token: BLOB_TOKEN,
+        addRandomSuffix: true,
+        contentType: 'application/json',
+      });
+    } catch (putErr) {
+      console.error('Vercel Blob put error:', putErr);
+      throw new Error(`Vercel Blob put failed: ${putErr instanceof Error ? putErr.message : String(putErr)}`);
+    }
 
     console.log(`Successfully saved blob: ${blob.url}`);
 
@@ -104,7 +118,7 @@ export async function POST(request: Request) {
     console.error('Error in POST /api/data (Vercel Blob):', error);
     return NextResponse.json({ 
       error: 'Failed to save to database', 
-      details: String(error) 
+      details: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

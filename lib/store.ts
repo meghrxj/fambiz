@@ -221,7 +221,8 @@ export const useFinanceStore = create<FinanceState>()(
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `Server returned ${response.status}`);
+          const errorMessage = errorData.details || errorData.error || `Server returned ${response.status}`;
+          throw new Error(errorMessage);
         }
         
         set({ serverStatus: 'connected' });
