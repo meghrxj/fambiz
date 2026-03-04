@@ -16,7 +16,7 @@ export async function GET() {
     });
 
     if (blobs.length === 0) {
-      return NextResponse.json({ data: null, message: 'No database found on Vercel Blob' });
+      return NextResponse.json({ data: {} });
     }
 
     // Sort by uploadedAt to get the latest
