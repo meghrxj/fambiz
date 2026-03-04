@@ -213,13 +213,21 @@ export const useFinanceStore = create<FinanceState>()(
         profitShares: state.profitShares,
       };
       try {
-        await fetch('/api/data', {
+        const response = await fetch('/api/data', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ data: dataToSave }),
         });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Server returned ${response.status}`);
+        }
+        
+        set({ serverStatus: 'connected' });
       } catch (error) {
         console.error('Failed to save to server:', error);
+        set({ serverStatus: 'error' });
       }
     };
 
