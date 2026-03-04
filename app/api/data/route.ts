@@ -4,7 +4,7 @@ import { put, list, del } from '@vercel/blob';
 // Use the token provided by the user, prioritizing environment variable
 const BLOB_TOKEN = (process.env.BLOB_READ_WRITE_TOKEN && process.env.BLOB_READ_WRITE_TOKEN.length > 0) 
   ? process.env.BLOB_READ_WRITE_TOKEN 
-  : "vercel_blob_rw_u7xmQmFK11UoBPbb_xnZiuH1Y9Pbd11RnkpFRYVQIlA2BkY";
+  : "vercel_blob_rw_TwY6xtWQxNR36eVG_JaBjlo6v9C1KYFEW4AuqFlxZ2fsuCl";
 
 const BLOB_PREFIX = 'family_finance_db';
 const BLOB_FILENAME = 'family_finance_db.json';
