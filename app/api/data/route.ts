@@ -1,33 +1,43 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { put, list, del } from '@vercel/blob';
 
-// Use the root directory for the data file to be more reliable
-const DATA_FILE = path.join(process.cwd(), 'family_finance_db.json');
+// Use the token provided by the user
+const BLOB_TOKEN = "vercel_blob_rw_u7xmQmFK11UoBPbb_xnZiuH1Y9Pbd11RnkpFRYVQIlA2BkY";
+const BLOB_PATH = 'family_finance_db.json';
 
 export async function GET() {
   try {
-    console.log('GET /api/data - Reading from:', DATA_FILE);
+    console.log('GET /api/data - Fetching from Vercel Blob');
     
-    if (!fs.existsSync(DATA_FILE)) {
-      return NextResponse.json({ data: null, message: 'Database file not found' });
+    // List blobs to find the latest one with our prefix
+    const { blobs } = await list({
+      prefix: 'family_finance_db',
+      token: BLOB_TOKEN,
+    });
+
+    if (blobs.length === 0) {
+      return NextResponse.json({ data: null, message: 'No database found on Vercel Blob' });
     }
 
-    const fileContent = fs.readFileSync(DATA_FILE, 'utf-8');
-    if (!fileContent || !fileContent.trim()) {
-      return NextResponse.json({ data: null, message: 'Database is empty' });
+    // Sort by uploadedAt to get the latest
+    const latestBlob = blobs.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())[0];
+    
+    const response = await fetch(latestBlob.url);
+    if (!response.ok) {
+      return NextResponse.json({ data: null, message: 'Failed to fetch blob content' });
     }
 
-    try {
-      const data = JSON.parse(fileContent);
-      return NextResponse.json({ data });
-    } catch (parseErr) {
-      console.error('JSON Parse Error:', parseErr);
-      // If corrupted, return null so client can start fresh or handle it
-      return NextResponse.json({ data: null, error: 'Database corrupted' });
-    }
+    const data = await response.json();
+    return NextResponse.json({ data }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+      }
+    });
   } catch (error) {
-    console.error('Error in GET /api/data:', error);
+    console.error('Error in GET /api/data (Vercel Blob):', error);
     return NextResponse.json({ error: 'Failed to read database', details: String(error) }, { status: 500 });
   }
 }
@@ -46,25 +56,45 @@ export async function POST(request: Request) {
       updatedAt: new Date().toISOString(),
     };
 
-    console.log('POST /api/data - Writing to:', DATA_FILE);
-    fs.writeFileSync(DATA_FILE, JSON.stringify(dataToSave, null, 2));
+    console.log('POST /api/data - Saving to Vercel Blob');
+    
+    // Save to Vercel Blob. We use addRandomSuffix: true to ensure a unique URL
+    // which bypasses any CDN/browser caching of the blob itself.
+    const blob = await put(BLOB_PATH, JSON.stringify(dataToSave, null, 2), {
+      access: 'public',
+      token: BLOB_TOKEN,
+      addRandomSuffix: true,
+      contentType: 'application/json',
+    });
 
-    return NextResponse.json({ success: true, updatedAt: dataToSave.updatedAt });
+    // Clean up old versions to keep it tidy (optional but good)
+    try {
+      const { blobs } = await list({ prefix: 'family_finance_db', token: BLOB_TOKEN });
+      const oldBlobs = blobs.filter(b => b.url !== blob.url);
+      if (oldBlobs.length > 0) {
+        await del(oldBlobs.map(b => b.url), { token: BLOB_TOKEN });
+      }
+    } catch (cleanupErr) {
+      console.warn('Cleanup of old blobs failed:', cleanupErr);
+    }
+
+    return NextResponse.json({ success: true, updatedAt: dataToSave.updatedAt, url: blob.url });
   } catch (error) {
-    console.error('Error in POST /api/data:', error);
+    console.error('Error in POST /api/data (Vercel Blob):', error);
     return NextResponse.json({ error: 'Failed to save to database', details: String(error) }, { status: 500 });
   }
 }
 
 export async function DELETE() {
   try {
-    console.log('DELETE /api/data - Clearing database');
-    if (fs.existsSync(DATA_FILE)) {
-      fs.writeFileSync(DATA_FILE, JSON.stringify({}, null, 2));
+    console.log('DELETE /api/data - Clearing Vercel Blob');
+    const { blobs } = await list({ prefix: 'family_finance_db', token: BLOB_TOKEN });
+    if (blobs.length > 0) {
+      await del(blobs.map(b => b.url), { token: BLOB_TOKEN });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error in DELETE /api/data:', error);
+    console.error('Error in DELETE /api/data (Vercel Blob):', error);
     return NextResponse.json({ error: 'Failed to clear database', details: String(error) }, { status: 500 });
   }
 }
