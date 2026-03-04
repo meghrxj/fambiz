@@ -31,7 +31,7 @@ export default function SettingsPage() {
     setSyncId
   } = useFinanceStore();
 
-  const { pushToCloud, pullFromCloud, isSyncing, error: syncError } = useCloudSync();
+  const { pushToCloud, pullFromCloud, deleteFromServer, isSyncing, error: syncError } = useCloudSync();
   const [syncInput, setSyncInput] = useState(syncId || '');
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
@@ -46,6 +46,15 @@ export default function SettingsPage() {
       setSyncId(syncInput);
       await pushToCloud();
       setSyncStatus('success');
+    }
+  };
+
+  const handleDeleteFromServer = async () => {
+    if (confirm('Are you sure you want to delete your data from the server? This will NOT delete your local data.')) {
+      const success = await deleteFromServer();
+      if (success) {
+        alert('Data deleted from server successfully.');
+      }
     }
   };
 
@@ -212,17 +221,18 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Cloud Sync */}
+      {/* Server Sync */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-white font-semibold">
-          <Cloud size={20} className="text-sky-500" />
-          <h3>Cloud Sync (Cross-Device)</h3>
+          <Database size={20} className="text-sky-500" />
+          <h3>Server Sync (Cross-Device)</h3>
         </div>
         <div className="bg-[#141414] border border-white/5 rounded-2xl p-8">
           <div className="max-w-xl">
             <p className="text-zinc-400 text-sm mb-6">
-              Enable Cloud Sync to access your data across different devices. 
-              Enter a unique <strong>Sync Key</strong> (e.g. your family name + a secret number) to link your devices.
+              Enable Server Sync to access your data across different devices. 
+              Your data will be stored securely on this website&apos;s server.
+              Enter a unique <strong>Sync Key</strong> to link your devices.
             </p>
             
             <div className="flex gap-3">
@@ -238,7 +248,7 @@ export default function SettingsPage() {
                 disabled={isSyncing}
                 className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium transition-all flex items-center gap-2"
               >
-                {isSyncing ? <RefreshCcw size={18} className="animate-spin" /> : <Cloud size={18} />}
+                {isSyncing ? <RefreshCcw size={18} className="animate-spin" /> : <RefreshCcw size={18} />}
                 {syncId ? 'Update Key' : 'Enable Sync'}
               </button>
             </div>
@@ -249,17 +259,26 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-3">
                     <CheckCircle2 size={18} className="text-sky-500" />
                     <div>
-                      <p className="text-white text-sm font-medium">Cloud Sync Active</p>
+                      <p className="text-white text-sm font-medium">Server Sync Active</p>
                       <p className="text-zinc-500 text-xs">Last synced: {lastSynced ? new Date(lastSynced).toLocaleString() : 'Never'}</p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => pushToCloud()}
-                    disabled={isSyncing}
-                    className="text-sky-500 hover:text-sky-400 text-xs font-bold uppercase tracking-wider"
-                  >
-                    Sync Now
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => pushToCloud()}
+                      disabled={isSyncing}
+                      className="text-sky-500 hover:text-sky-400 text-xs font-bold uppercase tracking-wider"
+                    >
+                      Sync Now
+                    </button>
+                    <button 
+                      onClick={handleDeleteFromServer}
+                      disabled={isSyncing}
+                      className="text-rose-500 hover:text-rose-400 text-xs font-bold uppercase tracking-wider"
+                    >
+                      Delete from Server
+                    </button>
+                  </div>
                 </div>
                 <button 
                   onClick={() => {
@@ -268,7 +287,7 @@ export default function SettingsPage() {
                   }}
                   className="text-zinc-500 hover:text-white text-xs underline"
                 >
-                  Disable Cloud Sync on this device
+                  Disable Sync on this device
                 </button>
               </div>
             )}
