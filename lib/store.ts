@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type PaymentMode = 'Cash' | 'Bank Transfer' | 'UPI' | 'Card' | 'Other';
-export type InvestmentType = 'Mutual Fund' | 'Gold' | 'Fixed Deposit' | 'Stock' | 'Other';
+export type InvestmentType = 'Mutual Fund' | 'Gold' | 'Fixed Deposit' | 'Stock' | 'Bond' | 'Other';
 export type LiabilityStatus = 'Active' | 'Closed';
 export type LendingStatus = 'Active' | 'Settled' | 'Overdue';
 
@@ -96,6 +96,8 @@ export interface Investment {
   folio?: string;
   strategy: 'SIP' | 'Lumpsum';
   amount: number;
+  currentValue?: number;
+  quantity?: number;
   dateInvested: string;
   frequency?: string;
   platform?: string;
@@ -162,6 +164,7 @@ interface FinanceState {
   deleteLiability: (id: string) => void;
   
   addInvestment: (investment: Investment) => void;
+  updateInvestment: (investment: Investment) => void;
   deleteInvestment: (id: string) => void;
   
   addLending: (lending: Lending) => void;
@@ -171,6 +174,11 @@ interface FinanceState {
   addProfitShare: (share: ProfitShare) => void;
   deleteProfitShare: (id: string) => void;
 
+  // Sync
+  syncId: string | null;
+  lastSynced: string | null;
+  setSyncId: (id: string | null) => void;
+  setLastSynced: (date: string | null) => void;
   importData: (data: any) => void;
   resetData: () => void;
 }
@@ -226,6 +234,7 @@ export const useFinanceStore = create<FinanceState>()(
       deleteLiability: (id) => set((state) => ({ liabilities: state.liabilities.filter(l => l.id !== id) })),
 
       addInvestment: (investment) => set((state) => ({ investments: [...state.investments, investment] })),
+      updateInvestment: (investment) => set((state) => ({ investments: state.investments.map(i => i.id === investment.id ? investment : i) })),
       deleteInvestment: (id) => set((state) => ({ investments: state.investments.filter(i => i.id !== id) })),
 
       addLending: (lending) => set((state) => ({ lending: [...state.lending, lending] })),
@@ -235,7 +244,26 @@ export const useFinanceStore = create<FinanceState>()(
       addProfitShare: (share) => set((state) => ({ profitShares: [...state.profitShares, share] })),
       deleteProfitShare: (id) => set((state) => ({ profitShares: state.profitShares.filter(s => s.id !== id) })),
 
-      importData: (data) => set(() => ({ ...data })),
+      // Sync
+      syncId: null,
+      lastSynced: null,
+      setSyncId: (id) => set({ syncId: id }),
+      setLastSynced: (date) => set({ lastSynced: date }),
+
+      importData: (data) => set(() => ({ 
+        members: data.members || [],
+        categories: data.categories || [],
+        salaries: data.salaries || [],
+        expenses: data.expenses || [],
+        liabilities: data.liabilities || [],
+        investments: data.investments || [],
+        lending: data.lending || [],
+        profitShares: data.profitShares || [],
+        properties: data.properties || [],
+        rentalPayments: data.rentalPayments || [],
+        syncId: data.syncId || null,
+        lastSynced: data.lastSynced || null,
+      })),
       resetData: () => set(() => ({
         members: [],
         salaries: [],
