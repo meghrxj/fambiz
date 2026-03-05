@@ -214,7 +214,7 @@ export default function RentalIncomePage() {
         const invoiceDate = format(getInvoiceDate(cursor), 'yyyy-MM-dd');
         const monthStr = format(cursor, 'yyyy-MM');
 
-        let status: 'Paid' | 'Pending' | 'Late' | 'Invoiced' | 'Upcoming' = 'Paid';
+        let status = 'Paid';
         if (cursor.getTime() === now.getTime()) {
           status = 'Invoiced';
         } else if (cursor.getTime() === nextMonth.getTime()) {
@@ -234,7 +234,7 @@ export default function RentalIncomePage() {
           dueDate: invoiceDate,
           paidDate: status === 'Paid' ? invoiceDate : '',
           monthFor: monthStr,
-          status,
+          status: status as any,
           paymentMode: 'Bank Transfer',
           invoiceDate,
           isPartnerPaid: status === 'Paid',
@@ -301,7 +301,7 @@ export default function RentalIncomePage() {
       const invoiceDate = format(getInvoiceDate(cursor), 'yyyy-MM-dd');
       const monthStr = format(cursor, 'yyyy-MM');
 
-      let status: 'Paid' | 'Pending' | 'Late' | 'Invoiced' | 'Upcoming' = 'Paid';
+      let status = 'Paid';
       if (isAfter(cursor, now)) {
         status = 'Upcoming';
       } else if (cursor.getTime() === now.getTime()) {
@@ -319,7 +319,7 @@ export default function RentalIncomePage() {
         dueDate: invoiceDate,
         paidDate: status === 'Paid' ? invoiceDate : '',
         monthFor: monthStr,
-        status,
+        status: status as any,
         paymentMode: 'Bank Transfer',
         invoiceDate,
         isPartnerPaid: status === 'Paid',
@@ -674,10 +674,10 @@ export default function RentalIncomePage() {
                       <td className="px-6 py-4">
                         <span className={cn(
                           "px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                          payment.status === 'Paid' ? "bg-emerald-500/10 text-emerald-500" :
-                          payment.status === 'Late' ? "bg-rose-500/10 text-rose-500" :
-                          payment.status === 'Invoiced' ? "bg-blue-500/10 text-blue-500" :
-                          payment.status === 'Upcoming' ? "bg-amber-500/10 text-amber-500" :
+                          (payment.status as string) === 'Paid' ? "bg-emerald-500/10 text-emerald-500" :
+                          (payment.status as string) === 'Late' ? "bg-rose-500/10 text-rose-500" :
+                          (payment.status as string) === 'Invoiced' ? "bg-blue-500/10 text-blue-500" :
+                          (payment.status as string) === 'Upcoming' ? "bg-amber-500/10 text-amber-500" :
                           "bg-zinc-500/10 text-zinc-500"
                         )}>
                           {payment.status}
@@ -1012,6 +1012,9 @@ export default function RentalIncomePage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
     </div>
   );
 }
