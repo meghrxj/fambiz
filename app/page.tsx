@@ -63,7 +63,7 @@ export default function Dashboard() {
     .filter(e => isWithinInterval(parseISO(e.date), { start: monthStart, end: monthEnd }))
     .reduce((acc, e) => acc + e.amount, 0);
 
-  const netCashflow = totalIncome - monthlyExpenses - monthlyInvestment;
+  const netCashflow = totalIncome - monthlyExpenses;
 
   const activeLiabilities = liabilities.filter(l => l.status === 'Active');
   const monthlyEMI = activeLiabilities.reduce((acc, l) => acc + l.emiAmount, 0);
