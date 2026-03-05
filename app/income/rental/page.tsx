@@ -1015,6 +1015,4 @@ export default function RentalIncomePage() {
     </div>
   );
 }
-    </div>
-  );
 }
