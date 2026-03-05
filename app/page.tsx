@@ -57,7 +57,7 @@ export default function Dashboard() {
     .filter(i => isWithinInterval(parseISO(i.dateInvested), { start: monthStart, end: monthEnd }))
     .reduce((acc, i) => acc + i.amount, 0);
 
-  const totalIncome = monthlySalary + monthlyRent;
+  const totalIncome = monthlyRent;
 
   const monthlyExpenses = expenses
     .filter(e => isWithinInterval(parseISO(e.date), { start: monthStart, end: monthEnd }))
