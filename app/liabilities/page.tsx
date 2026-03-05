@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useFinanceStore, Liability, PaymentMode, LiabilityStatus } from '@/lib/store';
 import { Plus, Trash2, CreditCard, Calendar, AlertCircle, CheckCircle2, Building2, TrendingDown, ChevronRight } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addMonths } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function LiabilitiesPage() {
@@ -11,7 +11,7 @@ export default function LiabilitiesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedLiabilityId, setSelectedLiabilityId] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<Partial<Liability>>({
+  const [formData, setFormData] = useState<Partial<Liability> & { totalEMIMonths?: number }>({
     type: 'Loan',
     lender: '',
     principal: 0,
@@ -21,15 +21,31 @@ export default function LiabilitiesPage() {
     status: 'Active',
     paymentModeDefault: 'Bank Transfer',
     notes: '',
+    totalEMIMonths: 0,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.lender || !formData.emiAmount) return;
 
+    const totalMonths = formData.totalEMIMonths || 0;
+    const emiPayments: { month: string; status: 'Paid' | 'Pending' }[] = [];
+    if (totalMonths > 0 && formData.startDate) {
+      const start = parseISO(formData.startDate);
+      for (let i = 0; i < totalMonths; i++) {
+        const m = addMonths(start, i);
+        emiPayments.push({
+          month: format(m, 'yyyy-MM'),
+          status: 'Pending',
+        });
+      }
+    }
+
     addLiability({
       ...formData,
       id: Math.random().toString(36).substr(2, 9),
+      emiPayments,
+      totalEMIMonths: totalMonths,
     } as Liability);
     
     setIsModalOpen(false);
@@ -43,6 +59,7 @@ export default function LiabilitiesPage() {
       status: 'Active',
       paymentModeDefault: 'Bank Transfer',
       notes: '',
+      totalEMIMonths: 0,
     });
   };
 
@@ -52,6 +69,15 @@ export default function LiabilitiesPage() {
     const paidEMIs = l.emiPayments?.filter(p => p.status === 'Paid').length || 0;
     return acc + (paidEMIs * l.emiAmount);
   }, 0);
+  const totalLiabilityAmount = activeLiabilities.reduce((acc, l) => {
+    const months = (l as any).totalEMIMonths || l.emiPayments?.length || 0;
+    return acc + (l.emiAmount * months);
+  }, 0);
+  const totalPaidActive = activeLiabilities.reduce((acc, l) => {
+    const paidEMIs = l.emiPayments?.filter(p => p.status === 'Paid').length || 0;
+    return acc + (paidEMIs * l.emiAmount);
+  }, 0);
+  const remainingLiability = totalLiabilityAmount - totalPaidActive;
 
   return (
     <div className="space-y-6">
@@ -68,7 +94,7 @@ export default function LiabilitiesPage() {
         </button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-[#141414] border border-white/5 p-6 rounded-2xl">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
@@ -89,6 +115,15 @@ export default function LiabilitiesPage() {
         </div>
         <div className="bg-[#141414] border border-white/5 p-6 rounded-2xl">
           <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
+              <AlertCircle size={18} />
+            </div>
+            <span className="text-zinc-500 text-sm font-medium">Remaining Liability</span>
+          </div>
+          <h3 className="text-2xl font-bold text-white">₹{remainingLiability.toLocaleString('en-IN')}</h3>
+        </div>
+        <div className="bg-[#141414] border border-white/5 p-6 rounded-2xl">
+          <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-zinc-500/10 text-zinc-500">
               <Calendar size={18} />
             </div>
@@ -103,6 +138,8 @@ export default function LiabilitiesPage() {
           const paidCount = liability.emiPayments?.filter(p => p.status === 'Paid').length || 0;
           const totalEMIs = liability.emiPayments?.length || 0;
           const paidAmount = paidCount * liability.emiAmount;
+          const totalLoanValue = liability.emiAmount * totalEMIs;
+          const balanceAmount = totalLoanValue - paidAmount;
 
           return (
             <div key={liability.id} className="bg-[#141414] border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
@@ -152,9 +189,33 @@ export default function LiabilitiesPage() {
                   <span className="text-zinc-300">₹{liability.principal?.toLocaleString('en-IN') || '-'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Total Loan Value</span>
+                  <span className="text-zinc-300">₹{totalLoanValue.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
                   <span className="text-zinc-500">Paid So Far</span>
                   <span className="text-emerald-400 font-medium">₹{paidAmount.toLocaleString('en-IN')} ({paidCount}/{totalEMIs} EMIs)</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Balance Amount</span>
+                  <span className={cn("font-medium", balanceAmount > 0 ? "text-rose-400" : "text-emerald-400")}>
+                    ₹{balanceAmount.toLocaleString('en-IN')}
+                  </span>
+                </div>
+                {totalEMIs > 0 && (
+                  <div className="mt-2">
+                    <div className="flex justify-between text-[10px] text-zinc-500 mb-1">
+                      <span>Progress</span>
+                      <span>{Math.round((paidCount / totalEMIs) * 100)}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all"
+                        style={{ width: `${(paidCount / totalEMIs) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-zinc-500">Start Date</span>
                   <span className="text-zinc-300">{format(parseISO(liability.startDate), 'dd MMM yyyy')}</span>
@@ -237,6 +298,15 @@ export default function LiabilitiesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Principal / Loan Amount</label>
+                  <input 
+                    type="number" 
+                    value={formData.principal || ''}
+                    onChange={(e) => setFormData({...formData, principal: Number(e.target.value)})}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                  />
+                </div>
+                <div>
                   <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">EMI Amount</label>
                   <input 
                     type="number" 
@@ -244,6 +314,19 @@ export default function LiabilitiesPage() {
                     onChange={(e) => setFormData({...formData, emiAmount: Number(e.target.value)})}
                     className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
                     required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Total EMI Months</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    value={formData.totalEMIMonths || ''}
+                    onChange={(e) => setFormData({...formData, totalEMIMonths: Number(e.target.value)})}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                    placeholder="e.g. 60"
                   />
                 </div>
                 <div>
@@ -258,17 +341,6 @@ export default function LiabilitiesPage() {
                     required
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Principal</label>
-                  <input 
-                    type="number" 
-                    value={formData.principal || ''}
-                    onChange={(e) => setFormData({...formData, principal: Number(e.target.value)})}
-                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Start Date</label>
                   <input 
@@ -280,6 +352,24 @@ export default function LiabilitiesPage() {
                   />
                 </div>
               </div>
+              {formData.totalEMIMonths && formData.totalEMIMonths > 0 && formData.emiAmount ? (
+                <div className="bg-white/5 p-3 rounded-xl space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-500">Total Payable</span>
+                    <span className="text-white font-medium">₹{(formData.emiAmount * formData.totalEMIMonths).toLocaleString('en-IN')}</span>
+                  </div>
+                  {formData.principal ? (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-500">Interest Component</span>
+                      <span className="text-amber-400 font-medium">₹{((formData.emiAmount * formData.totalEMIMonths) - formData.principal).toLocaleString('en-IN')}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-500">EMI Schedule</span>
+                    <span className="text-zinc-400">{formData.totalEMIMonths} months from {formData.startDate ? format(parseISO(formData.startDate), 'MMM yyyy') : '-'}</span>
+                  </div>
+                </div>
+              ) : null}
               <div>
                 <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Payment Mode</label>
                 <select 
