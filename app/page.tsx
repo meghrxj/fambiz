@@ -78,7 +78,7 @@ export default function Dashboard() {
     return acc + (paidEMIs * l.emiAmount);
   }, 0);
 
-  const totalAssets = totalRentAllTime + totalCurrentInvestments - totalEMIPaidAllTime;
+  const totalAssets = totalRentAllTime + totalCurrentInvestments - totalEMIPaidAllTime - activeLiabilities;
 
   const outstandingLending = lending
     .filter(l => l.status !== 'Settled')
