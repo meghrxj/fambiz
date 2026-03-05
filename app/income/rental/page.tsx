@@ -30,12 +30,13 @@ function computeRentForMonth(
   return rent;
 }
 
-function computeTaxBreakdown(baseAmount: number) {
-  const sgst = Number((baseAmount * 0.09).toFixed(2));
-  const cgst = Number((baseAmount * 0.09).toFixed(2));
-  const tds = Number((baseAmount * 0.10).toFixed(2));
-  const total = Number((baseAmount + sgst + cgst - tds).toFixed(2));
-  return { sgst, cgst, tds, total };
+function computeTaxBreakdown(invoiceAmount: number) {
+  const base = Number((invoiceAmount / 1.18).toFixed(2));
+  const sgst = Number((base * 0.09).toFixed(2));
+  const cgst = Number((base * 0.09).toFixed(2));
+  const tds = Number((base * 0.10).toFixed(2));
+  const total = Number((invoiceAmount - tds).toFixed(2));
+  return { base, sgst, cgst, tds, total };
 }
 
 function getNextRealIncrementDate(
@@ -105,10 +106,10 @@ export default function RentalIncomePage() {
   });
 
   const handleBaseAmountChange = (val: number) => {
-    const { sgst, cgst, tds, total } = computeTaxBreakdown(val);
+    const { base, sgst, cgst, tds, total } = computeTaxBreakdown(val);
     setPaymentFormData({
       ...paymentFormData,
-      baseAmount: val,
+      baseAmount: base,
       sgst,
       cgst,
       tds,
@@ -128,13 +129,13 @@ export default function RentalIncomePage() {
       prop.incrementEveryMonths,
       monthDate
     );
-    const { sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
+    const { base, sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
     const partnerAmount = prop.partnerSplitPercent ? Number((total * prop.partnerSplitPercent / 100).toFixed(2)) : 0;
     const invoiceDate = format(getInvoiceDate(monthDate), 'yyyy-MM-dd');
     setPaymentFormData({
       ...paymentFormData,
       propertyId,
-      baseAmount: rentForMonth,
+      baseAmount: base,
       sgst,
       cgst,
       tds,
@@ -157,13 +158,13 @@ export default function RentalIncomePage() {
         prop.incrementEveryMonths,
         monthDate
       );
-      const { sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
+      const { base, sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
       const partnerAmount = prop.partnerSplitPercent ? Number((total * prop.partnerSplitPercent / 100).toFixed(2)) : 0;
       const invoiceDate = format(getInvoiceDate(monthDate), 'yyyy-MM-dd');
       setPaymentFormData({
         ...paymentFormData,
         monthFor: monthStr,
-        baseAmount: rentForMonth,
+        baseAmount: base,
         sgst,
         cgst,
         tds,
@@ -209,7 +210,7 @@ export default function RentalIncomePage() {
           propFormData.incrementEveryMonths!,
           cursor
         );
-        const { sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
+        const { base, sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
         const partnerAmount = propFormData.partnerSplitPercent ? Number((total * propFormData.partnerSplitPercent / 100).toFixed(2)) : 0;
         const invoiceDate = format(getInvoiceDate(cursor), 'yyyy-MM-dd');
         const monthStr = format(cursor, 'yyyy-MM');
@@ -227,7 +228,7 @@ export default function RentalIncomePage() {
           id: Math.random().toString(36).substr(2, 9),
           propertyId: newProp.id,
           amountPaid: total,
-          baseAmount: rentForMonth,
+          baseAmount: base,
           sgst,
           cgst,
           tds,
@@ -296,7 +297,7 @@ export default function RentalIncomePage() {
         prop.incrementEveryMonths,
         cursor
       );
-      const { sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
+      const { base, sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
       const partnerAmount = prop.partnerSplitPercent ? Number((total * prop.partnerSplitPercent / 100).toFixed(2)) : 0;
       const invoiceDate = format(getInvoiceDate(cursor), 'yyyy-MM-dd');
       const monthStr = format(cursor, 'yyyy-MM');
@@ -312,7 +313,7 @@ export default function RentalIncomePage() {
         id: Math.random().toString(36).substr(2, 9),
         propertyId: rangeData.propertyId,
         amountPaid: total,
-        baseAmount: rentForMonth,
+        baseAmount: base,
         sgst,
         cgst,
         tds,
@@ -350,7 +351,7 @@ export default function RentalIncomePage() {
         prop.incrementEveryMonths,
         nextMonth
       );
-      const { sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
+      const { base, sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
       const partnerAmount = prop.partnerSplitPercent ? Number((total * prop.partnerSplitPercent / 100).toFixed(2)) : 0;
       const nextIncrement = getNextRealIncrementDate(prop.rentStartDate, prop.incrementEveryMonths);
       const isIncrementMonth = nextIncrement.getTime() === nextMonth.getTime();
@@ -368,7 +369,7 @@ export default function RentalIncomePage() {
       return {
         property: prop,
         monthFor: nextMonthStr,
-        baseAmount: rentForMonth,
+        baseAmount: base,
         sgst,
         cgst,
         tds,
@@ -392,9 +393,10 @@ export default function RentalIncomePage() {
   }, [properties, rentalPayments]);
 
   const chartData = useMemo(() => {
+    const pIds = new Set(properties.map(p => p.id));
     const monthMap: Record<string, { month: string; income: number; partnerPaid: number }> = {};
     rentalPayments
-      .filter(p => p.status === 'Paid')
+      .filter(p => p.status === 'Paid' && pIds.has(p.propertyId))
       .forEach(p => {
         if (!monthMap[p.monthFor]) {
           monthMap[p.monthFor] = { month: p.monthFor, income: 0, partnerPaid: 0 };
@@ -405,7 +407,8 @@ export default function RentalIncomePage() {
     return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month)).slice(-12);
   }, [rentalPayments]);
 
-  const totalPaidIncome = rentalPayments.filter(p => p.status === 'Paid').reduce((acc, p) => acc + p.amountPaid, 0);
+  const propertyIds = new Set(properties.map(p => p.id));
+  const totalPaidIncome = rentalPayments.filter(p => p.status === 'Paid' && propertyIds.has(p.propertyId)).reduce((acc, p) => acc + p.amountPaid, 0);
 
   return (
     <div className="space-y-8">
@@ -859,7 +862,7 @@ export default function RentalIncomePage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Base Rent Amount</label>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Invoice Amount (incl. GST)</label>
                   <input
                     type="number"
                     value={paymentFormData.baseAmount || ''}
