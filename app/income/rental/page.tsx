@@ -333,14 +333,25 @@ export default function RentalIncomePage() {
     setIsRangeModalOpen(false);
   };
 
-  const totalMonthlyRent = properties.reduce((acc, p) => acc + p.rentAmount, 0);
+  const totalMonthlyRent = properties.reduce((acc, p) => {
+    const currentRent = computeRentForMonth(
+      p.rentAmount,
+      p.rentStartDate,
+      p.incrementRule,
+      p.incrementValue,
+      p.incrementEveryMonths,
+      new Date()
+    );
+    const { total } = computeTaxBreakdown(currentRent);
+    return acc + total;
+  }, 0);
   const totalDeposits = properties.reduce((acc, p) => acc + (p.depositAmount || 0), 0);
 
   const upcomingPayments = useMemo(() => {
-    const nextMonth = addMonths(startOfMonth(new Date()), 1);
-    const nextMonthStr = format(nextMonth, 'yyyy-MM');
+    const currentMonth = startOfMonth(new Date());
+    const currentMonthStr = format(currentMonth, 'yyyy-MM');
     return properties.map(prop => {
-      const existing = rentalPayments.find(p => p.propertyId === prop.id && p.monthFor === nextMonthStr);
+      const existing = rentalPayments.find(p => p.propertyId === prop.id && p.monthFor === currentMonthStr);
       if (existing) return { ...existing, property: prop };
 
       const rentForMonth = computeRentForMonth(
@@ -349,14 +360,14 @@ export default function RentalIncomePage() {
         prop.incrementRule,
         prop.incrementValue,
         prop.incrementEveryMonths,
-        nextMonth
+        currentMonth
       );
       const { base, sgst, cgst, tds, total } = computeTaxBreakdown(rentForMonth);
       const partnerAmount = prop.partnerSplitPercent ? Number((total * prop.partnerSplitPercent / 100).toFixed(2)) : 0;
       const nextIncrement = getNextRealIncrementDate(prop.rentStartDate, prop.incrementEveryMonths);
-      const isIncrementMonth = nextIncrement.getTime() === nextMonth.getTime();
+      const isIncrementMonth = nextIncrement.getTime() === currentMonth.getTime();
 
-      const prevMonth = startOfMonth(new Date());
+      const prevMonth = addMonths(currentMonth, -1);
       const prevRent = computeRentForMonth(
         prop.rentAmount,
         prop.rentStartDate,
@@ -368,7 +379,7 @@ export default function RentalIncomePage() {
 
       return {
         property: prop,
-        monthFor: nextMonthStr,
+        monthFor: currentMonthStr,
         baseAmount: base,
         sgst,
         cgst,
@@ -378,15 +389,15 @@ export default function RentalIncomePage() {
         isIncrementMonth,
         incrementFrom: prevRent,
         incrementTo: rentForMonth,
-        invoiceDate: format(getInvoiceDate(nextMonth), 'yyyy-MM-dd'),
+        invoiceDate: format(getInvoiceDate(currentMonth), 'yyyy-MM-dd'),
         status: 'Upcoming' as const,
       };
     }).filter(p => {
       const prop = p.property;
       if ((prop as any).tenureEndDate) {
         const tenureEnd = startOfMonth(parseISO((prop as any).tenureEndDate));
-        const nextMonth = addMonths(startOfMonth(new Date()), 1);
-        if (isAfter(nextMonth, tenureEnd)) return false;
+        const currentMonth = startOfMonth(new Date());
+        if (isAfter(currentMonth, tenureEnd)) return false;
       }
       return true;
     });
@@ -445,7 +456,7 @@ export default function RentalIncomePage() {
             <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
               <Building2 size={18} />
             </div>
-            <span className="text-zinc-500 text-sm font-medium">Current Monthly Rent</span>
+            <span className="text-zinc-500 text-sm font-medium">Monthly Income (Net)</span>
           </div>
           <h3 className="text-2xl font-bold text-white">₹{totalMonthlyRent.toLocaleString('en-IN')}</h3>
         </div>
@@ -508,7 +519,7 @@ export default function RentalIncomePage() {
             <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
               <Clock size={18} />
             </div>
-            <h3 className="font-semibold text-white">Upcoming — {format(addMonths(new Date(), 1), 'MMMM yyyy')}</h3>
+            <h3 className="font-semibold text-white">Upcoming — {format(new Date(), 'MMMM yyyy')} (Invoice in {format(addMonths(new Date(), 1), 'MMMM')})</h3>
           </div>
           <div className="divide-y divide-white/5">
             {upcomingPayments.map((item, i) => (
@@ -535,9 +546,41 @@ export default function RentalIncomePage() {
                     <p className="text-emerald-400 font-bold">₹{item.amountPaid.toLocaleString('en-IN')}</p>
                     <p className="text-zinc-600 text-[10px]">Base: ₹{item.baseAmount?.toLocaleString('en-IN')} · Partner: ₹{item.partnerAmount?.toLocaleString('en-IN') || '0'}</p>
                   </div>
-                  <span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-500">
-                    Upcoming
-                  </span>
+                  {(item as any).status === 'Paid' ? (
+                    <span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-500">
+                      Paid
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const prop = item.property;
+                        const partnerAmount = prop.partnerSplitPercent ? Number((item.amountPaid * prop.partnerSplitPercent / 100).toFixed(2)) : 0;
+                        if ('id' in item && item.id) {
+                          deleteRentalPayment(item.id as string);
+                        }
+                        addRentalPayment({
+                          id: Math.random().toString(36).substr(2, 9),
+                          propertyId: prop.id,
+                          amountPaid: item.amountPaid,
+                          baseAmount: item.baseAmount || 0,
+                          sgst: item.sgst || 0,
+                          cgst: item.cgst || 0,
+                          tds: item.tds || 0,
+                          dueDate: item.invoiceDate,
+                          paidDate: format(new Date(), 'yyyy-MM-dd'),
+                          monthFor: item.monthFor,
+                          status: 'Paid' as any,
+                          paymentMode: 'Bank Transfer',
+                          invoiceDate: item.invoiceDate,
+                          isPartnerPaid: false,
+                          partnerAmount,
+                        } as RentalPayment);
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer"
+                    >
+                      Mark Paid
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
