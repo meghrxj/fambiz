@@ -5,7 +5,6 @@ import { useFinanceStore, RentalProperty, RentalPayment, PaymentMode } from '@/l
 import { Plus, Building2, Calendar, TrendingUp, Trash2, Edit2, ChevronRight, Receipt, CheckCircle2, Clock, Landmark, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import { format, addMonths, parseISO, isBefore, isAfter, startOfMonth, differenceInMonths } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 function computeRentForMonth(
   baseRent: number,
@@ -343,7 +342,8 @@ export default function RentalIncomePage() {
       new Date()
     );
     const { total } = computeTaxBreakdown(currentRent);
-    return acc + total;
+    const partnerCut = p.partnerSplitPercent ? Number((total * p.partnerSplitPercent / 100).toFixed(2)) : 0;
+    return acc + total - partnerCut;
   }, 0);
   const totalDeposits = properties.reduce((acc, p) => acc + (p.depositAmount || 0), 0);
 
@@ -402,21 +402,6 @@ export default function RentalIncomePage() {
       return true;
     });
   }, [properties, rentalPayments]);
-
-  const chartData = useMemo(() => {
-    const pIds = new Set(properties.map(p => p.id));
-    const monthMap: Record<string, { month: string; income: number; partnerPaid: number }> = {};
-    rentalPayments
-      .filter(p => p.status === 'Paid' && pIds.has(p.propertyId))
-      .forEach(p => {
-        if (!monthMap[p.monthFor]) {
-          monthMap[p.monthFor] = { month: p.monthFor, income: 0, partnerPaid: 0 };
-        }
-        monthMap[p.monthFor].income += p.amountPaid;
-        monthMap[p.monthFor].partnerPaid += (p.partnerAmount || 0);
-      });
-    return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month)).slice(-12);
-  }, [rentalPayments]);
 
   const propertyIds = new Set(properties.map(p => p.id));
   const totalPaidIncome = rentalPayments.filter(p => p.status === 'Paid' && propertyIds.has(p.propertyId)).reduce((acc, p) => acc + p.amountPaid, 0);
@@ -488,30 +473,6 @@ export default function RentalIncomePage() {
           <h3 className="text-2xl font-bold text-white">{properties.length}</h3>
         </div>
       </div>
-
-      {chartData.length > 0 && (
-        <div className="bg-[#141414] border border-white/5 p-6 rounded-2xl">
-          <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">Monthly Rental Income (Paid)</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="month" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
-                formatter={(value: number | undefined) => [`₹${(value ?? 0).toLocaleString('en-IN')}`, 'Income']}
-              />
-              <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} fill="url(#incomeGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
 
       {upcomingPayments.length > 0 && (
         <div className="bg-[#141414] border border-white/5 rounded-2xl overflow-hidden">
