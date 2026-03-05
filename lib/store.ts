@@ -94,6 +94,7 @@ export interface Liability {
   status: LiabilityStatus;
   paymentModeDefault: PaymentMode;
   emiPayments: { month: string; status: 'Paid' | 'Pending'; paidDate?: string }[];
+  totalEMIMonths?: number;
   notes?: string;
 }
 
@@ -314,10 +315,6 @@ export const useFinanceStore = create<FinanceState>()(
         while (current <= end) {
           const monthFor = current.toISOString().substring(0, 7);
           if (!state.rentalPayments.some(p => p.propertyId === propertyId && p.monthFor === monthFor)) {
-            // Tax logic: 122500 example
-            // Base = Total / 1.18 (if GST is 18%)
-            // But user said: Base = 103813.56 for 122500
-            // 103813.56 * 1.18 = 122500.0008
             const baseAmount = property.rentAmount / 1.18;
             const sgst = baseAmount * 0.09;
             const cgst = baseAmount * 0.09;
@@ -357,18 +354,29 @@ export const useFinanceStore = create<FinanceState>()(
 
       addLiability: (liability) => autoSet((state) => {
         const start = new Date(liability.startDate);
-        const today = new Date();
+        const totalMonths = liability.totalEMIMonths || 0;
         const emiPayments: { month: string; status: 'Paid' | 'Pending'; paidDate?: string }[] = [];
-        let current = new Date(start.getFullYear(), start.getMonth(), 1);
-        
-        while (current <= today) {
-          emiPayments.push({
-            month: format(current, 'MMMM yyyy'),
-            status: 'Pending',
-          });
-          current.setMonth(current.getMonth() + 1);
+
+        if (totalMonths > 0) {
+          for (let i = 0; i < totalMonths; i++) {
+            const m = new Date(start.getFullYear(), start.getMonth() + i, 1);
+            emiPayments.push({
+              month: format(m, 'MMMM yyyy'),
+              status: 'Pending',
+            });
+          }
+        } else {
+          const today = new Date();
+          let current = new Date(start.getFullYear(), start.getMonth(), 1);
+          while (current <= today) {
+            emiPayments.push({
+              month: format(current, 'MMMM yyyy'),
+              status: 'Pending',
+            });
+            current.setMonth(current.getMonth() + 1);
+          }
         }
-        
+
         return { liabilities: [...state.liabilities, { ...liability, emiPayments }] };
       }),
       updateLiability: (liability) => autoSet((state) => ({ liabilities: state.liabilities.map(l => l.id === liability.id ? liability : l) })),
@@ -463,7 +471,6 @@ export const useFinanceStore = create<FinanceState>()(
       loadFromServer: async () => {
         try {
           set({ serverStatus: 'loading' });
-          // Add timestamp to bust cache
           const response = await fetch(`/api/data?t=${Date.now()}`, {
             cache: 'no-store',
             headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
