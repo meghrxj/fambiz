@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import { useFinanceStore, SalaryIncome, PaymentMode } from '@/lib/store';
-import { Plus, Search, Trash2, Filter, Download } from 'lucide-react';
+import { Plus, Search, Trash2, Filter, Download, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function SalaryPage() {
-  const { salaries, members, addSalary, deleteSalary } = useFinanceStore();
+  const { salaries, members, addSalary, addSalaryRange, deleteSalary } = useFinanceStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRangeModalOpen, setIsRangeModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [formData, setFormData] = useState<Partial<SalaryIncome>>({
@@ -16,9 +17,17 @@ export default function SalaryPage() {
     amount: 0,
     frequency: 'Monthly',
     dateReceived: new Date().toISOString().split('T')[0],
-    monthTag: format(new Date(), 'MMMM yyyy'),
+    monthTag: format(new Date(), 'yyyy-MM'),
     paymentMode: 'Bank Transfer',
     notes: '',
+  });
+
+  const [rangeData, setRangeData] = useState({
+    memberId: '',
+    amount: 0,
+    startDate: format(new Date(), 'yyyy-MM'),
+    endDate: format(new Date(), 'yyyy-MM'),
+    employer: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -28,6 +37,7 @@ export default function SalaryPage() {
     addSalary({
       ...formData,
       id: Math.random().toString(36).substr(2, 9),
+      monthTag: formData.monthTag || format(new Date(formData.dateReceived!), 'yyyy-MM'),
     } as SalaryIncome);
     
     setIsModalOpen(false);
@@ -36,13 +46,28 @@ export default function SalaryPage() {
       amount: 0,
       frequency: 'Monthly',
       dateReceived: new Date().toISOString().split('T')[0],
-      monthTag: format(new Date(), 'MMMM yyyy'),
+      monthTag: format(new Date(), 'yyyy-MM'),
       paymentMode: 'Bank Transfer',
       notes: '',
     });
   };
 
-  const filteredSalaries = salaries.filter(s => {
+  const handleRangeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rangeData.memberId || !rangeData.amount || !rangeData.startDate || !rangeData.endDate) return;
+    
+    addSalaryRange(
+      rangeData.memberId,
+      rangeData.amount,
+      rangeData.startDate + '-01',
+      rangeData.endDate + '-01',
+      rangeData.employer
+    );
+    
+    setIsRangeModalOpen(false);
+  };
+
+  const filteredSalaries = salaries.sort((a, b) => b.monthTag.localeCompare(a.monthTag)).filter(s => {
     const memberName = members.find(m => m.id === s.memberId)?.name || '';
     return memberName.toLowerCase().includes(searchTerm.toLowerCase()) || 
            s.monthTag.toLowerCase().includes(searchTerm.toLowerCase());
@@ -55,12 +80,20 @@ export default function SalaryPage() {
           <h1 className="text-2xl font-bold text-white">Salary Income</h1>
           <p className="text-zinc-500 text-sm">Manage monthly salary entries for family members.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
-        >
-          <Plus size={18} /> Add Salary
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => setIsRangeModalOpen(true)}
+            className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
+          >
+            <Calendar size={18} /> Bulk Add Range
+          </button>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
+          >
+            <Plus size={18} /> Add Salary
+          </button>
+        </div>
       </header>
 
       <div className="flex gap-4 items-center bg-[#141414] p-4 rounded-2xl border border-white/5">
@@ -129,6 +162,87 @@ export default function SalaryPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Range Modal */}
+      {isRangeModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-6">Bulk Add Salary Range</h2>
+            <form onSubmit={handleRangeSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Family Member</label>
+                <select 
+                  value={rangeData.memberId}
+                  onChange={(e) => setRangeData({...rangeData, memberId: e.target.value})}
+                  className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                  required
+                >
+                  <option value="">Select Member</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Monthly Amount</label>
+                <input 
+                  type="number" 
+                  value={rangeData.amount || ''}
+                  onChange={(e) => setRangeData({...rangeData, amount: Number(e.target.value)})}
+                  className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Start Month</label>
+                  <input 
+                    type="month" 
+                    value={rangeData.startDate}
+                    onChange={(e) => setRangeData({...rangeData, startDate: e.target.value})}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">End Month</label>
+                  <input 
+                    type="month" 
+                    value={rangeData.endDate}
+                    onChange={(e) => setRangeData({...rangeData, endDate: e.target.value})}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Employer (Optional)</label>
+                <input 
+                  type="text" 
+                  value={rangeData.employer}
+                  onChange={(e) => setRangeData({...rangeData, employer: e.target.value})}
+                  className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setIsRangeModalOpen(false)}
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-white font-medium py-2 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-xl transition-colors"
+                >
+                  Generate Entries
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {isModalOpen && (

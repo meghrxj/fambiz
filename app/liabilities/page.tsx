@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import { useFinanceStore, Liability, PaymentMode, LiabilityStatus } from '@/lib/store';
-import { Plus, Trash2, CreditCard, Calendar, AlertCircle, CheckCircle2, Building2, TrendingDown } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Calendar, AlertCircle, CheckCircle2, Building2, TrendingDown, ChevronRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function LiabilitiesPage() {
-  const { liabilities, addLiability, deleteLiability, updateLiability } = useFinanceStore();
+  const { liabilities, addLiability, deleteLiability, updateLiability, toggleEMIPayment } = useFinanceStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedLiabilityId, setSelectedLiabilityId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<Liability>>({
     type: 'Loan',
@@ -47,6 +48,10 @@ export default function LiabilitiesPage() {
 
   const activeLiabilities = liabilities.filter(l => l.status === 'Active');
   const totalEMI = activeLiabilities.reduce((acc, l) => acc + l.emiAmount, 0);
+  const totalPaidSoFar = liabilities.reduce((acc, l) => {
+    const paidEMIs = l.emiPayments?.filter(p => p.status === 'Paid').length || 0;
+    return acc + (paidEMIs * l.emiAmount);
+  }, 0);
 
   return (
     <div className="space-y-6">
@@ -78,88 +83,124 @@ export default function LiabilitiesPage() {
             <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
               <CheckCircle2 size={18} />
             </div>
-            <span className="text-zinc-500 text-sm font-medium">Active Loans</span>
+            <span className="text-zinc-500 text-sm font-medium">Total Paid So Far</span>
           </div>
-          <h3 className="text-2xl font-bold text-white">{activeLiabilities.length}</h3>
+          <h3 className="text-2xl font-bold text-white">₹{totalPaidSoFar.toLocaleString('en-IN')}</h3>
         </div>
         <div className="bg-[#141414] border border-white/5 p-6 rounded-2xl">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-zinc-500/10 text-zinc-500">
               <Calendar size={18} />
             </div>
-            <span className="text-zinc-500 text-sm font-medium">Next Due Date</span>
+            <span className="text-zinc-500 text-sm font-medium">Active Loans</span>
           </div>
-          <h3 className="text-2xl font-bold text-white">
-            {activeLiabilities.length > 0 ? `Day ${Math.min(...activeLiabilities.map(l => l.emiDueDateMonthly))}` : '-'}
-          </h3>
+          <h3 className="text-2xl font-bold text-white">{activeLiabilities.length}</h3>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {liabilities.map((liability) => (
-          <div key={liability.id} className="bg-[#141414] border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex items-center gap-4">
-                <div className={cn(
-                  "p-3 rounded-xl",
-                  liability.status === 'Active' ? "bg-amber-500/10 text-amber-500" : "bg-zinc-500/10 text-zinc-500"
-                )}>
-                  <CreditCard size={24} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">{liability.lender}</h3>
-                  <p className="text-zinc-500 text-xs uppercase tracking-widest font-semibold">{liability.type}</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => updateLiability({...liability, status: liability.status === 'Active' ? 'Closed' : 'Active'})}
-                  className={cn(
-                    "px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors",
-                    liability.status === 'Active' ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20" : "bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20"
-                  )}
-                >
-                  {liability.status === 'Active' ? 'Mark Closed' : 'Reopen'}
-                </button>
-                <button onClick={() => deleteLiability(liability.id)} className="p-2 text-zinc-600 hover:text-red-400 transition-colors">
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
+        {liabilities.map((liability) => {
+          const paidCount = liability.emiPayments?.filter(p => p.status === 'Paid').length || 0;
+          const totalEMIs = liability.emiPayments?.length || 0;
+          const paidAmount = paidCount * liability.emiAmount;
 
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              <div className="space-y-1">
-                <p className="text-zinc-500 text-xs font-medium">Monthly EMI</p>
-                <p className="text-xl font-bold text-white">₹{liability.emiAmount.toLocaleString('en-IN')}</p>
+          return (
+            <div key={liability.id} className="bg-[#141414] border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "p-3 rounded-xl",
+                    liability.status === 'Active' ? "bg-amber-500/10 text-amber-500" : "bg-zinc-500/10 text-zinc-500"
+                  )}>
+                    <CreditCard size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{liability.lender}</h3>
+                    <p className="text-zinc-500 text-xs uppercase tracking-widest font-semibold">{liability.type}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => updateLiability({...liability, status: liability.status === 'Active' ? 'Closed' : 'Active'})}
+                    className={cn(
+                      "px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors",
+                      liability.status === 'Active' ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20" : "bg-zinc-500/10 text-zinc-500 hover:bg-zinc-500/20"
+                    )}
+                  >
+                    {liability.status === 'Active' ? 'Mark Closed' : 'Reopen'}
+                  </button>
+                  <button onClick={() => deleteLiability(liability.id)} className="p-2 text-zinc-600 hover:text-red-400 transition-colors">
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-zinc-500 text-xs font-medium">Due Date</p>
-                <p className="text-xl font-bold text-white">Day {liability.emiDueDateMonthly}</p>
-              </div>
-            </div>
 
-            <div className="space-y-3 border-t border-white/5 pt-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-zinc-500">Principal Amount</span>
-                <span className="text-zinc-300">₹{liability.principal?.toLocaleString('en-IN') || '-'}</span>
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div className="space-y-1">
+                  <p className="text-zinc-500 text-xs font-medium">Monthly EMI</p>
+                  <p className="text-xl font-bold text-white">₹{liability.emiAmount.toLocaleString('en-IN')}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-zinc-500 text-xs font-medium">Due Date</p>
+                  <p className="text-xl font-bold text-white">Day {liability.emiDueDateMonthly}</p>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-zinc-500">Start Date</span>
-                <span className="text-zinc-300">{format(parseISO(liability.startDate), 'dd MMM yyyy')}</span>
+
+              <div className="space-y-3 border-t border-white/5 pt-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Principal Amount</span>
+                  <span className="text-zinc-300">₹{liability.principal?.toLocaleString('en-IN') || '-'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Paid So Far</span>
+                  <span className="text-emerald-400 font-medium">₹{paidAmount.toLocaleString('en-IN')} ({paidCount}/{totalEMIs} EMIs)</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-zinc-500">Start Date</span>
+                  <span className="text-zinc-300">{format(parseISO(liability.startDate), 'dd MMM yyyy')}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-zinc-500">Default Mode</span>
-                <span className="text-zinc-300">{liability.paymentModeDefault}</span>
-              </div>
+              
+              <button 
+                onClick={() => setSelectedLiabilityId(selectedLiabilityId === liability.id ? null : liability.id)}
+                className="w-full mt-6 py-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2"
+              >
+                {selectedLiabilityId === liability.id ? 'Hide EMI Schedule' : 'View EMI Schedule'}
+                <ChevronRight size={14} className={cn("transition-transform", selectedLiabilityId === liability.id && "rotate-90")} />
+              </button>
+
+              {selectedLiabilityId === liability.id && (
+                <div className="mt-4 space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                  {liability.emiPayments?.map((emi) => (
+                    <div key={emi.month} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                      <div>
+                        <p className="text-sm font-medium text-white">{emi.month}</p>
+                        <p className="text-[10px] text-zinc-500">Due on Day {liability.emiDueDateMonthly}</p>
+                      </div>
+                      <button
+                        onClick={() => toggleEMIPayment(liability.id, emi.month)}
+                        className={cn(
+                          "px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
+                          emi.status === 'Paid' 
+                            ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/20" 
+                            : "bg-amber-500/10 text-amber-500 border border-amber-500/10 hover:bg-amber-500/20"
+                        )}
+                      >
+                        {emi.status === 'Paid' ? 'Paid' : 'Mark Paid'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {liability.notes && (
+                <div className="mt-4 p-3 bg-white/[0.02] rounded-xl text-xs text-zinc-500 italic">
+                  &quot;{liability.notes}&quot;
+                </div>
+              )}
             </div>
-            
-            {liability.notes && (
-              <div className="mt-4 p-3 bg-white/[0.02] rounded-xl text-xs text-zinc-500 italic">
-                &quot;{liability.notes}&quot;
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Modal */}

@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 import { useFinanceStore, Investment, InvestmentType } from '@/lib/store';
-import { Plus, Trash2, TrendingUp, Building2, Coins, Landmark, PieChart, User, Filter, Search, Edit3, ArrowUpRight, ArrowDownRight, Briefcase } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, Building2, Coins, Landmark, PieChart, User, Filter, Search, Edit3, ArrowUpRight, ArrowDownRight, Briefcase, Calendar } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function InvestmentsPage() {
-  const { investments, members, addInvestment, deleteInvestment, updateInvestment } = useFinanceStore();
+  const { investments, members, addInvestment, addSIPRange, deleteInvestment, updateInvestment } = useFinanceStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRangeModalOpen, setIsRangeModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('all');
@@ -27,6 +28,16 @@ export default function InvestmentsPage() {
     notes: '',
   });
 
+  const [rangeData, setRangeData] = useState({
+    memberId: '',
+    type: 'Mutual Fund' as InvestmentType,
+    name: '',
+    amount: 0,
+    startDate: format(new Date(), 'yyyy-MM'),
+    endDate: format(new Date(), 'yyyy-MM'),
+    platform: '',
+  });
+
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -41,6 +52,23 @@ export default function InvestmentsPage() {
     
     setIsModalOpen(false);
     resetForm();
+  };
+
+  const handleRangeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rangeData.memberId || !rangeData.name || !rangeData.amount) return;
+    
+    addSIPRange(
+      rangeData.memberId,
+      rangeData.name,
+      rangeData.amount,
+      rangeData.startDate + '-01',
+      rangeData.endDate + '-01',
+      rangeData.type,
+      rangeData.platform
+    );
+    
+    setIsRangeModalOpen(false);
   };
 
   const handleUpdate = (e: React.FormEvent) => {
@@ -104,12 +132,20 @@ export default function InvestmentsPage() {
           <h1 className="text-2xl font-bold text-white">Investments</h1>
           <p className="text-zinc-500 text-sm">Track Mutual Funds, Stocks, Gold, FDs, and Bonds across family members.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
-        >
-          <Plus size={18} /> Add Investment
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => setIsRangeModalOpen(true)}
+            className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
+          >
+            <Calendar size={18} /> Bulk Add SIP
+          </button>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2"
+          >
+            <Plus size={18} /> Add Investment
+          </button>
+        </div>
       </header>
 
       {/* Summary Cards */}
@@ -262,6 +298,103 @@ export default function InvestmentsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Range Modal */}
+      {isRangeModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-md p-8 shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-6">Bulk Add SIP Range</h2>
+            <form onSubmit={handleRangeSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Family Member</label>
+                <select 
+                  value={rangeData.memberId}
+                  onChange={(e) => setRangeData({...rangeData, memberId: e.target.value})}
+                  className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                  required
+                >
+                  <option value="">Select Member</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Type</label>
+                  <select 
+                    value={rangeData.type}
+                    onChange={(e) => setRangeData({...rangeData, type: e.target.value as InvestmentType})}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                  >
+                    <option value="Mutual Fund">Mutual Fund</option>
+                    <option value="Stock">Stock</option>
+                    <option value="Gold">Gold</option>
+                    <option value="Fixed Deposit">Fixed Deposit</option>
+                    <option value="Bond">Bond</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Monthly Amount</label>
+                  <input 
+                    type="number" 
+                    value={rangeData.amount || ''}
+                    onChange={(e) => setRangeData({...rangeData, amount: Number(e.target.value)})}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Investment Name</label>
+                <input 
+                  type="text" 
+                  value={rangeData.name}
+                  onChange={(e) => setRangeData({...rangeData, name: e.target.value})}
+                  className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Start Month</label>
+                  <input 
+                    type="month" 
+                    value={rangeData.startDate}
+                    onChange={(e) => setRangeData({...rangeData, startDate: e.target.value})}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">End Month</label>
+                  <input 
+                    type="month" 
+                    value={rangeData.endDate}
+                    onChange={(e) => setRangeData({...rangeData, endDate: e.target.value})}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Platform (Optional)</label>
+                <input 
+                  type="text" 
+                  value={rangeData.platform}
+                  onChange={(e) => setRangeData({...rangeData, platform: e.target.value})}
+                  className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={() => setIsRangeModalOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-white font-medium py-2 rounded-xl transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-xl transition-colors">Generate SIPs</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add Modal */}
       {isModalOpen && (
